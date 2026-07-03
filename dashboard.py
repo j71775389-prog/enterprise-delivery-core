@@ -198,10 +198,8 @@ if menu == "🏠 Master Campaign Engine":
 # ---------------- TAB 2: ACCOUNT & TARGET LEAD MATRIX ----------------
 elif menu == "📂 Account & Target Lead Matrix":
     st.title("📂 Multi-Channel Pipeline Configuration Storage Matrix")
-    c1, c2 = st.columns(2)
-    with c1:
-        st.subheader("🔒 Multi-Protocol Authentication Nodes Matrix")
-        
-        # SMTP Loader
-        with st.expander("➕ Register SMTP Routing Node (Gmail, Outlook, custom hosts)", expanded=True):
-            smtp_user = st.text_input("SMTP Authorized Email Address")
+    
+    # NEW FIXED LAYOUT: Recipient box is moved to the TOP position
+    with st.container(border=True):
+        st.subheader("🎯 Targeted Recipient Database Cluster Allocation")
+        leads_raw = st.text_area("Paste Targeted Bulk Lead Dataset Stream (One entry per line format)", height=200, placeholder="example1@domain.com\nexample2@domain.com")
