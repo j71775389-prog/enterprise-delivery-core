@@ -24,7 +24,7 @@ try:
 except ImportError:
     GOOGLE_API_AVAILABLE = False
 
-# Page Framework Configuration
+# Page Framework Configuration Matrix
 st.set_page_config(
     page_title="Enterprise Communications Dispatch Core v5.0",
     page_icon="📬",
@@ -32,7 +32,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Initialize Multi-Session Persistent Storage Matrix
+# Initialize Session State Memories
 if "master_uid" not in st.session_state:
     st.session_state.master_uid = "admin"
 if "master_pwd" not in st.session_state:
@@ -54,7 +54,7 @@ if "is_sending" not in st.session_state:
 if "global_logs" not in st.session_state:
     st.session_state.global_logs = ""
 
-# ---------------- Master Login Layer ----------------
+# ---------------- Master Login Gate ----------------
 if not st.session_state.authenticated:
     st.markdown("<h2 style='text-align: center; margin-top: 50px;'>🔐 ENTERPRISE INSTANCE ACTIVATION</h2>", unsafe_allow_html=True)
     c1, c2, c3 = st.columns(3)
@@ -70,7 +70,7 @@ if not st.session_state.authenticated:
                     st.error("❌ Authentication Layer Rejected Instance Key.")
     st.stop()
 
-# Sidebar Setup
+# Sidebar Navigation Panel
 st.sidebar.title("⚡ Delivery Core v5.0")
 st.sidebar.markdown(f"**Dispatched Vector:** `{st.session_state.sent_count}`")
 st.sidebar.markdown(f"**Failed Pipeline:** `{st.session_state.failed_count}`")
@@ -100,16 +100,9 @@ if menu == "🏠 Master Campaign Engine":
 
     with st.container(border=True):
         st.subheader("📝 Message Payload Formulation")
-        subject_input = st.text_input("Subject Template String (Use `{ID}` for custom placeholder interpolation)", value="Notification Update Ref #{ID}")
-        
-        st.markdown("**HTML Structure Template / Plain Text Payload Area**")
-        html_code = st.text_area(
-            "Live Integrated HTML Coding Workspace", 
-            value="<html><body><h2>Corporate Update</h2><p>This is an automated transmission message record reference code: <b>{ID}</b></p></body></html>", 
-            height=220
-        )
+        subject_input = st.text_input("Subject Template String (Use `{ID}` for custom placeholders)", value="Notification Update Ref #{ID}")
+        html_code = st.text_area("Live Integrated HTML Coding Workspace", value="<html><body><h2>Corporate Update</h2><p>This is reference code: <b>{ID}</b></p></body></html>", height=180)
 
-    # Master Action Trigger Control Button
     if not st.session_state.is_sending:
         if st.button("🚀 IGNITE ACTIVE OUTBOUND DISPATCH INTERFACE", type="primary", use_container_width=True):
             if engine_mode == "Standard SMTP Matrix Engine" and not st.session_state.smtp_pool:
@@ -129,14 +122,12 @@ if menu == "🏠 Master Campaign Engine":
     if st.session_state.is_sending:
         st.markdown("### 📊 In-Flight Pipeline Output Logs")
         log_feed = st.empty()
-        
         smtp_list = list(st.session_state.smtp_pool.keys())
         gmail_api_list = list(st.session_state.gmail_api_pool.keys())
 
         for idx, recipient in enumerate(st.session_state.loaded_emails):
             if not st.session_state.is_sending:
                 break
-                
             rand_token = "".join(random.choices(string.ascii_uppercase + string.digits, k=12))
             live_sub = subject_input.replace("{ID}", rand_token)
             processed_html = html_code.replace("{ID}", rand_token)
@@ -148,14 +139,13 @@ if menu == "🏠 Master Campaign Engine":
             if delivery_mode == "Inline Pure HTML Code":
                 msg.attach(MIMEText(processed_html, 'html'))
             else:
-                msg.attach(MIMEText(f"Please find the transmission log attached. Ref Code: {rand_token}", 'plain'))
+                msg.attach(MIMEText(f"Please find the log attached. Ref: {rand_token}", 'plain'))
                 pdf_part = MIMEBase('application', 'octet-stream')
                 pdf_part.set_payload(processed_html.encode('utf-8'))
                 encoders.encode_base64(pdf_part)
                 pdf_part.add_header('Content-Disposition', f'attachment; filename="Statement_{rand_token}.pdf"')
                 msg.attach(pdf_part)
                 
-            # ---------------- PROTOCOL GATEWAY 1: GMAIL API (OAUTH2) ----------------
             if engine_mode == "Gmail API Engine (OAuth2)":
                 current_api_node = gmail_api_list[idx % len(gmail_api_list)]
                 try:
@@ -166,12 +156,10 @@ if menu == "🏠 Master Campaign Engine":
                     raw_payload = base64.urlsafe_b64encode(msg.as_bytes()).decode()
                     service.users().messages().send(userId='me', body={'raw': raw_payload}).execute()
                     st.session_state.sent_count += 1
-                    st.session_state.global_logs += f"[{time.strftime('%H:%M:%S')}] 🟢 [API SUCCESS] Sender {current_api_node} -> Target: {recipient} (ID: {rand_token})\n"
+                    st.session_state.global_logs += f"[{time.strftime('%H:%M:%S')}] 🟢 [API SUCCESS] {current_api_node} -> {recipient} (ID: {rand_token})\n"
                 except Exception as ex:
                     st.session_state.failed_count += 1
-                    st.session_state.global_logs += f"[{time.strftime('%H:%M:%S')}] ❌ [API CRASH] Node {current_api_node} failed -> {recipient}: {str(ex)}\n"
-
-            # ---------------- PROTOCOL GATEWAY 2: STANDARD SMTP NODES ----------------
+                    st.session_state.global_logs += f"[{time.strftime('%H:%M:%S')}] ❌ [API FAIL] {current_api_node} -> {recipient}: {str(ex)}\n"
             else:
                 current_smtp_node = smtp_list[idx % len(smtp_list)]
                 smtp_config = st.session_state.smtp_pool[current_smtp_node]
@@ -181,25 +169,35 @@ if menu == "🏠 Master Campaign Engine":
                         server.login(current_smtp_node, smtp_config["pass"])
                         server.sendmail(current_smtp_node, recipient, msg.as_string())
                     st.session_state.sent_count += 1
-                    st.session_state.global_logs += f"[{time.strftime('%H:%M:%S')}] 🟢 [SMTP SUCCESS] Matrix Node {current_smtp_node} -> Target: {recipient}\n"
+                    st.session_state.global_logs += f"[{time.strftime('%H:%M:%S')}] 🟢 [SMTP SUCCESS] {current_smtp_node} -> {recipient}\n"
                 except Exception as ex:
                     st.session_state.failed_count += 1
-                    st.session_state.global_logs += f"[{time.strftime('%H:%M:%S')}] ⚠️ [SMTP REFUSED] Channel {current_smtp_node} failed -> {recipient}: {str(ex)}\n"
+                    st.session_state.global_logs += f"[{time.strftime('%H:%M:%S')}] ⚠️ [SMTP FAIL] {current_smtp_node} -> {recipient}: {str(ex)}\n"
                     
             log_feed.code(st.session_state.global_logs)
             time.sleep(random.uniform(delay_min, delay_max))
-            
         st.session_state.is_sending = False
         st.rerun()
 
-    if st.session_state.global_logs:
-        st.code(st.session_state.global_logs)
-
 # ---------------- TAB 2: ACCOUNT & TARGET LEAD MATRIX ----------------
 elif menu == "📂 Account & Target Lead Matrix":
-    st.title("📂 Multi-Channel Pipeline Configuration Storage Matrix")
+    st.title("📂 System Infrastructure Configuration Hub")
     
-    # NEW FIXED LAYOUT: Recipient box is moved to the TOP position
-    with st.container(border=True):
-        st.subheader("🎯 Targeted Recipient Database Cluster Allocation")
-        leads_raw = st.text_area("Paste Targeted Bulk Lead Dataset Stream (One entry per line format)", height=200, placeholder="example1@domain.com\nexample2@domain.com")
+    # Grid System optimized for layout rendering fix
+    main_col1, main_col2 = st.columns([1.1, 1.0])
+    
+    with main_col1:
+        st.subheader("🔒 Multi-Account Authentication Nodes Matrix")
+        
+        # 1. SMTP Box Registration Widget
+        with st.container(border=True):
+            st.markdown("##### ➕ Register SMTP Target Node")
+            smtp_user = st.text_input("SMTP Email Username Address")
+            smtp_pass = st.text_input("SMTP Access App Password Key", type="password")
+            smtp_host = st.selectbox("Preset Network Protocol Server Node", ["://gmail.com", "://office365.com", "://yahoo.com"])
+            if st.button("Inject Active SMTP Parameters", use_container_width=True):
+                if smtp_user and smtp_pass:
+                    st.session_state.smtp_pool[smtp_user] = {"pass": smtp_pass, "host": smtp_host, "port": 587}
+                    st.success(f"Loaded SMTP configuration values for {smtp_user}")
+                    st.rerun()
+
