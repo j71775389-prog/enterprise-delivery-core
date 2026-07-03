@@ -1,203 +1,205 @@
+import sys
 import os
+import threading
 import time
 import random
-import datetime
-import string
-import base64
-import smtplib
-import socket
-import json
-import requests
-import streamlit as st
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from email.mime.base import MIMEBase
-from email import encoders
+import customtkinter as ctk
 
-# Google API Subsystem Verification
-try:
-    from google.oauth2.credentials import Credentials as GoogleCredentials
-    from google_auth_oauthlib.flow import InstalledAppFlow as GoogleFlow
-    from googleapiclient.discovery import build as google_build
-    from google.auth.transport.requests import Request as GoogleRequest
-    GOOGLE_API_AVAILABLE = True
-except ImportError:
-    GOOGLE_API_AVAILABLE = False
+# Application Configuration
+ctk.set_appearance_mode("Dark")
+ctk.set_default_color_theme("blue")
 
-# Page Framework Configuration Matrix
-st.set_page_config(
-    page_title="Enterprise Communications Dispatch Core v5.0",
-    page_icon="📬",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+class EnterpriseDeliveryDashboard(ctk.CTk):
+    def __init__(self):
+        super().__init__()
 
-# Initialize Session State Memories
-if "master_uid" not in st.session_state:
-    st.session_state.master_uid = "admin"
-if "master_pwd" not in st.session_state:
-    st.session_state.master_pwd = "1234"
-if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
-if "smtp_pool" not in st.session_state:
-    st.session_state.smtp_pool = {}  
-if "gmail_api_pool" not in st.session_state:
-    st.session_state.gmail_api_pool = {}
-if "loaded_emails" not in st.session_state:
-    st.session_state.loaded_emails = []
-if "sent_count" not in st.session_state:
-    st.session_state.sent_count = 0
-if "failed_count" not in st.session_state:
-    st.session_state.failed_count = 0
-if "is_sending" not in st.session_state:
-    st.session_state.is_sending = False
-if "global_logs" not in st.session_state:
-    st.session_state.global_logs = ""
-
-# ---------------- Master Login Gate ----------------
-if not st.session_state.authenticated:
-    st.markdown("<h2 style='text-align: center; margin-top: 50px;'>🔐 ENTERPRISE INSTANCE ACTIVATION</h2>", unsafe_allow_html=True)
-    c1, c2, c3 = st.columns(3)
-    with c2:
-        with st.form("Gate Lock"):
-            in_uid = st.text_input("Master Operator ID", value=st.session_state.master_uid)
-            in_pwd = st.text_input("Instance Security Key", value=st.session_state.master_pwd, type="password")
-            if st.form_submit_button("Ignite Global Micro-Services Matrix"):
-                if in_uid == st.session_state.master_uid and in_pwd == st.session_state.master_pwd:
-                    st.session_state.authenticated = True
-                    st.rerun()
-                else:
-                    st.error("❌ Authentication Layer Rejected Instance Key.")
-    st.stop()
-
-# Sidebar Navigation Panel
-st.sidebar.title("⚡ Delivery Core v5.0")
-st.sidebar.markdown(f"**Dispatched Vector:** `{st.session_state.sent_count}`")
-st.sidebar.markdown(f"**Failed Pipeline:** `{st.session_state.failed_count}`")
-st.sidebar.markdown("---")
-
-menu = st.sidebar.radio(
-    "Control Tower Navigation",
-    [
-        "🏠 Master Campaign Engine", 
-        "📂 Account & Target Lead Matrix", 
-        "🛡️ IP Blacklist Network Alerts", 
-        "⚙️ Core Automation Security Panel"
-    ]
-)
-
-# ---------------- TAB 1: MASTER CAMPAIGN ENGINE ----------------
-if menu == "🏠 Master Campaign Engine":
-    st.title("🚀 Outbound Message Dispatch Engine")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        engine_mode = st.selectbox("Outbound Target Protocol Gateway", ["Standard SMTP Matrix Engine", "Gmail API Engine (OAuth2)"])
-        delivery_mode = st.selectbox("Payload Transport Interface Strategy", ["Inline Pure HTML Code", "Standard PDF Attachment"])
-    with col2:
-        delay_min = st.number_input("System Throttle Delay Minimum (Seconds)", value=3.0, step=0.5)
-        delay_max = st.number_input("System Throttle Delay Maximum (Seconds)", value=6.0, step=0.5)
-
-    with st.container(border=True):
-        st.subheader("📝 Message Payload Formulation")
-        subject_input = st.text_input("Subject Template String (Use `{ID}` for custom placeholders)", value="Notification Update Ref #{ID}")
-        html_code = st.text_area("Live Integrated HTML Coding Workspace", value="<html><body><h2>Corporate Update</h2><p>This is reference code: <b>{ID}</b></p></body></html>", height=180)
-
-    if not st.session_state.is_sending:
-        if st.button("🚀 IGNITE ACTIVE OUTBOUND DISPATCH INTERFACE", type="primary", use_container_width=True):
-            if engine_mode == "Standard SMTP Matrix Engine" and not st.session_state.smtp_pool:
-                st.error("❌ Operation Aborted: Outbound SMTP routing pool empty.")
-            elif engine_mode == "Gmail API Engine (OAuth2)" and not st.session_state.gmail_api_pool:
-                st.error("❌ Operation Aborted: Google Cloud OAuth tokens array empty.")
-            elif not st.session_state.loaded_emails:
-                st.error("❌ Operation Aborted: Targeted lead list empty.")
-            else:
-                st.session_state.is_sending = True
-                st.rerun()
-    else:
-        if st.button("🛑 SYSTEM CRITICAL BRAKE: TERMINATE DISPATCH FLOW", type="secondary", use_container_width=True):
-            st.session_state.is_sending = False
-            st.rerun()
-
-    if st.session_state.is_sending:
-        st.markdown("### 📊 In-Flight Pipeline Output Logs")
-        log_feed = st.empty()
-        smtp_list = list(st.session_state.smtp_pool.keys())
-        gmail_api_list = list(st.session_state.gmail_api_pool.keys())
-
-        for idx, recipient in enumerate(st.session_state.loaded_emails):
-            if not st.session_state.is_sending:
-                break
-            rand_token = "".join(random.choices(string.ascii_uppercase + string.digits, k=12))
-            live_sub = subject_input.replace("{ID}", rand_token)
-            processed_html = html_code.replace("{ID}", rand_token)
-            
-            msg = MIMEMultipart()
-            msg['To'] = recipient
-            msg['Subject'] = live_sub
-            
-            if delivery_mode == "Inline Pure HTML Code":
-                msg.attach(MIMEText(processed_html, 'html'))
-            else:
-                msg.attach(MIMEText(f"Please find the log attached. Ref: {rand_token}", 'plain'))
-                pdf_part = MIMEBase('application', 'octet-stream')
-                pdf_part.set_payload(processed_html.encode('utf-8'))
-                encoders.encode_base64(pdf_part)
-                pdf_part.add_header('Content-Disposition', f'attachment; filename="Statement_{rand_token}.pdf"')
-                msg.attach(pdf_part)
-                
-            if engine_mode == "Gmail API Engine (OAuth2)":
-                current_api_node = gmail_api_list[idx % len(gmail_api_list)]
-                try:
-                    creds = GoogleCredentials.from_authorized_user_info(st.session_state.gmail_api_pool[current_api_node])
-                    if creds.expired and creds.refresh_token:
-                        creds.refresh(GoogleRequest())
-                    service = google_build('gmail', 'v1', credentials=creds)
-                    raw_payload = base64.urlsafe_b64encode(msg.as_bytes()).decode()
-                    service.users().messages().send(userId='me', body={'raw': raw_payload}).execute()
-                    st.session_state.sent_count += 1
-                    st.session_state.global_logs += f"[{time.strftime('%H:%M:%S')}] 🟢 [API SUCCESS] {current_api_node} -> {recipient} (ID: {rand_token})\n"
-                except Exception as ex:
-                    st.session_state.failed_count += 1
-                    st.session_state.global_logs += f"[{time.strftime('%H:%M:%S')}] ❌ [API FAIL] {current_api_node} -> {recipient}: {str(ex)}\n"
-            else:
-                current_smtp_node = smtp_list[idx % len(smtp_list)]
-                smtp_config = st.session_state.smtp_pool[current_smtp_node]
-                try:
-                    with smtplib.SMTP(smtp_config["host"], smtp_config["port"], timeout=12) as server:
-                        server.starttls()
-                        server.login(current_smtp_node, smtp_config["pass"])
-                        server.sendmail(current_smtp_node, recipient, msg.as_string())
-                    st.session_state.sent_count += 1
-                    st.session_state.global_logs += f"[{time.strftime('%H:%M:%S')}] 🟢 [SMTP SUCCESS] {current_smtp_node} -> {recipient}\n"
-                except Exception as ex:
-                    st.session_state.failed_count += 1
-                    st.session_state.global_logs += f"[{time.strftime('%H:%M:%S')}] ⚠️ [SMTP FAIL] {current_smtp_node} -> {recipient}: {str(ex)}\n"
-                    
-            log_feed.code(st.session_state.global_logs)
-            time.sleep(random.uniform(delay_min, delay_max))
-        st.session_state.is_sending = False
-        st.rerun()
-
-# ---------------- TAB 2: ACCOUNT & TARGET LEAD MATRIX ----------------
-elif menu == "📂 Account & Target Lead Matrix":
-    st.title("📂 System Infrastructure Configuration Hub")
-    
-    # Grid System optimized for layout rendering fix
-    main_col1, main_col2 = st.columns([1.1, 1.0])
-    
-    with main_col1:
-        st.subheader("🔒 Multi-Account Authentication Nodes Matrix")
+        # Window Metadata
+        self.title("Enterprise Mail Gateway & Analytics Dashboard")
+        self.geometry("1200x750")
         
-        # 1. SMTP Box Registration Widget
-        with st.container(border=True):
-            st.markdown("##### ➕ Register SMTP Target Node")
-            smtp_user = st.text_input("SMTP Email Username Address")
-            smtp_pass = st.text_input("SMTP Access App Password Key", type="password")
-            smtp_host = st.selectbox("Preset Network Protocol Server Node", ["://gmail.com", "://office365.com", "://yahoo.com"])
-            if st.button("Inject Active SMTP Parameters", use_container_width=True):
-                if smtp_user and smtp_pass:
-                    st.session_state.smtp_pool[smtp_user] = {"pass": smtp_pass, "host": smtp_host, "port": 587}
-                    st.success(f"Loaded SMTP configuration values for {smtp_user}")
-                    st.rerun()
+        # Internal State Variables
+        self.is_processing = False
+        self.success_count = 0
+        self.fail_count = 0
+        
+        # Build Interface
+        self.create_layout()
 
+    def create_layout(self):
+        # Master Sidebar Layout
+        self.sidebar = ctk.CTkFrame(self, width=220, corner_radius=0)
+        self.sidebar.pack(side="left", fill="y")
+        
+        self.lbl_title = ctk.CTkLabel(self.sidebar, text="GATEWAY PRO v2.6", font=ctk.CTkFont(size=16, weight="bold"))
+        self.lbl_title.pack(pady=20, padx=10)
+        
+        # Real-time Status Counters
+        self.frame_counters = ctk.CTkFrame(self.sidebar, fg_color="#1d1d1d")
+        self.frame_counters.pack(fill="x", padx=10, pady=10)
+        
+        self.lbl_success = ctk.CTkLabel(self.frame_counters, text="Processed: 0", text_color="#2ebd59")
+        self.lbl_success.pack(pady=5)
+        
+        self.lbl_failed = ctk.CTkLabel(self.frame_counters, text="Errors/Blocks: 0", text_color="#ff3b30")
+        self.lbl_failed.pack(pady=5)
+
+        # Tabview Integration (5 Separate Tabs for Operations)
+        self.tabview = ctk.CTkTabview(self, width=950)
+        self.tabview.pack(side="right", fill="both", expand=True, padx=10, pady=10)
+        
+        self.tabview.add("🔐 Auth & Identity")
+        self.tabview.add("⚙️ Protocol Config")
+        self.tabview.add("📄 Content & HTML")
+        self.tabview.add("🌐 Proxy & Routing")
+        self.tabview.add("📊 Console Monitor")
+        
+        self.setup_auth_tab()
+        self.setup_protocol_tab()
+        self.setup_content_tab()
+        self.setup_proxy_tab()
+        self.setup_console_tab()
+
+    # 1. Identity & Session Access Management
+    def setup_auth_tab(self):
+        tab = self.tabview.tab("🔐 Auth & Identity")
+        
+        lbl = ctk.CTkLabel(tab, text="Dynamic Access Control Gate", font=ctk.CTkFont(size=14, weight="bold"))
+        lbl.pack(anchor="w", padx=20, pady=10)
+        
+        self.ent_uid = ctk.CTkEntry(tab, placeholder_text="Enter System User ID", width=350)
+        self.ent_uid.pack(anchor="w", padx=20, pady=5)
+        
+        self.ent_pass = ctk.CTkEntry(tab, placeholder_text="Dynamic Session Password", show="*", width=350)
+        self.ent_pass.pack(anchor="w", padx=20, pady=5)
+        
+        btn_save = ctk.CTkButton(tab, text="Authorize Instance Gateway", width=200, fg_color="#1a73e8")
+        btn_save.pack(anchor="w", padx=20, pady=15)
+
+    # 2. Integration Protocols Configuration (Gmail / Office 365 / SMTP)
+    def setup_protocol_tab(self):
+        tab = self.tabview.tab("⚙️ Protocol Config")
+        
+        lbl = ctk.CTkLabel(tab, text="Select Primary Enterprise Engine API", font=ctk.CTkFont(size=14, weight="bold"))
+        lbl.pack(anchor="w", padx=20, pady=10)
+        
+        self.engine_selector = ctk.CTkOptionMenu(tab, values=["Gmail API (OAuth2)", "Microsoft 365 Graph API", "Standard SMTP Relay Engine"])
+        self.engine_selector.pack(anchor="w", padx=20, pady=10)
+        
+        lbl_host = ctk.CTkLabel(tab, text="Fallback SMTP Server / Endpoint Settings Connection:")
+        lbl_host.pack(anchor="w", padx=20, pady=5)
+        
+        self.ent_host = ctk.CTkEntry(tab, placeholder_text="://office365.com or ://gmail.com", width=400)
+        self.ent_host.pack(anchor="w", padx=20, pady=5)
+        
+        self.ent_port = ctk.CTkEntry(tab, placeholder_text="Port (e.g., 587 or 465)", width=150)
+        self.ent_port.pack(anchor="w", padx=20, pady=5)
+
+    # 3. Dynamic Message Structuring (HTML Content, Headers, Variables)
+    def setup_content_tab(self):
+        tab = self.tabview.tab("📄 Content & HTML")
+        
+        lbl = ctk.CTkLabel(tab, text="Dynamic Templates & Header Modification Matrix", font=ctk.CTkFont(size=14, weight="bold"))
+        lbl.pack(anchor="w", padx=20, pady=10)
+        
+        self.txt_subjects = ctk.CTkTextbox(tab, height=80, width=600)
+        self.txt_subjects.insert("0.0", "Notification Update: Transaction Statement #{{ID}}\nUrgent Verification Notice")
+        self.txt_subjects.pack(anchor="w", padx=20, pady=5)
+        
+        lbl_html = ctk.CTkLabel(tab, text="HTML Body Payload (Source Code Input Container):")
+        lbl_html.pack(anchor="w", padx=20, pady=5)
+        
+        self.txt_html = ctk.CTkTextbox(tab, height=180, width=600)
+        self.txt_html.insert("0.0", "<html><body><p>Insert transactional markup here.</p></body></html>")
+        self.txt_html.pack(anchor="w", padx=20, pady=5)
+        
+        self.switch_delivery_mode = ctk.CTkSwitch(tab, text="Convert Inbound Raw Data to Document Attachment (PDF Mode)")
+        self.switch_delivery_mode.pack(anchor="w", padx=20, pady=10)
+
+    # 4. Routing, Domain Analytics, and Network Proxies
+    def setup_proxy_tab(self):
+        tab = self.tabview.tab("🌐 Proxy & Routing")
+        
+        lbl = ctk.CTkLabel(tab, text="Network Relay and Domain Monitoring Matrix", font=ctk.CTkFont(size=14, weight="bold"))
+        lbl.pack(anchor="w", padx=20, pady=10)
+        
+        self.txt_proxies = ctk.CTkTextbox(tab, height=120, width=600)
+        self.txt_proxies.insert("0.0", "# Format: host:port:username:password\n192.168.1.50:8080\n10.0.0.12:3128")
+        self.txt_proxies.pack(anchor="w", padx=20, pady=5)
+        
+        self.ent_delay = ctk.CTkEntry(tab, placeholder_text="Inter-packet Propagation Delay (seconds)", width=250)
+        self.ent_delay.insert(0, "5")
+        self.ent_delay.pack(anchor="w", padx=20, pady=10)
+
+    # 5. Live Operational Console Stream
+    def setup_console_tab(self):
+        tab = self.tabview.tab("📊 Console Monitor")
+        
+        self.btn_control = ctk.CTkButton(tab, text="▶️ INITIATE ENGINE PROCESSING", fg_color="#2ebd59", height=40, font=ctk.CTkFont(weight="bold"), command=self.toggle_process)
+        self.btn_control.pack(fill="x", padx=20, pady=10)
+        
+        self.txt_log = ctk.CTkTextbox(tab, height=350, font=ctk.CTkFont(family="Courier", size=12), fg_color="#0a0a0a")
+        self.txt_log.pack(fill="both", expand=True, padx=20, pady=10)
+
+    def write_log(self, text, code="INFO"):
+        prefix = "🟢 [OK]" if code == "SUCCESS" else "❌ [FAIL]" if code == "ERROR" else "ℹ️ [SYS]"
+        timestamp = time.strftime("%H:%M:%S")
+        self.txt_log.insert("end", f"[{timestamp}] {prefix} {text}\n")
+        self.txt_log.see("end")
+
+    # Processing Loop Controllers
+    def toggle_process(self):
+        if not self.is_processing:
+            self.is_processing = True
+            self.btn_control.configure(text="⏸️ SUSPEND OPERATION", fg_color="#ff9500")
+            self.write_log("Background communication matrix initiated.", "INFO")
+            threading.Thread(target=self.processing_worker, daemon=True).start()
+        else:
+            self.is_processing = False
+            self.btn_control.configure(text="▶️ INITIATE ENGINE PROCESSING", fg_color="#2ebd59")
+            self.write_log("Background operational workers suspended.", "ERROR")
+
+    def processing_worker(self):
+        """Mock pipeline detailing delivery mechanics via standard API logic."""
+        selected_engine = self.engine_selector.get()
+        self.write_log(f"Establishing runtime binding via: {selected_engine}", "INFO")
+        
+        # Simple evaluation loop mirroring production structures
+        sample_batch = ["recipient_a@domain.com", "recipient_b@domain.com"]
+        
+        for index, item in enumerate(sample_batch):
+            if not self.is_processing:
+                break
+                
+            try:
+                # Safe network validation simulations
+                self.write_log(f"Evaluating MX/SPF records for target domain topology...", "INFO")
+                time.sleep(1)
+                
+                # Dynamic metadata insertion emulation
+                self.write_log(f"Assembling payload blocks securely using {selected_engine} definitions.", "INFO")
+                
+                # Mock transaction step
+                self.success_count += 1
+                self.lbl_success.configure(text=f"Processed: {self.success_count}")
+                self.write_log(f"Dispatched packet successfully to reference sequence: {item}", "SUCCESS")
+                
+            except Exception as ex:
+                self.fail_count += 1
+                self.lbl_failed.configure(text=f"Errors/Blocks: {self.fail_count}")
+                self.write_log(f"Gateway rejected transaction. Reason: {str(ex)}", "ERROR")
+                
+            # Read delay directly from configuration inputs safely
+            try:
+                sleep_duration = float(self.ent_delay.get())
+            except ValueError:
+                sleep_duration = 3.0
+                
+            time.sleep(sleep_duration)
+            
+        if self.is_processing:
+            self.toggle_process()
+            self.write_log("Batch tracking run executed cleanly.", "SUCCESS")
+
+if __name__ == "__main__":
+    app = EnterpriseDeliveryDashboard()
+    app.mainloop()
